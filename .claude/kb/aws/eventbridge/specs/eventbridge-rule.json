@@ -1,0 +1,110 @@
+{
+  "_meta": {
+    "description": "EventBridge rule spec for the invoice pipeline: S3 Object Created → SQS",
+    "mcp_validated": "2026-05-12",
+    "aws_docs": "https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-create-rule.html",
+    "terraform_resource": "aws_cloudwatch_event_rule + aws_cloudwatch_event_target"
+  },
+
+  "rule": {
+    "Name": "invoice-uploaded-{env}",
+    "Description": "Routes TIFF invoice uploads from S3 to processing SQS queue",
+    "EventBusName": "default",
+    "State": "ENABLED",
+    "EventPattern": {
+      "source": ["aws.s3"],
+      "detail-type": ["Object Created"],
+      "detail": {
+        "bucket": {
+          "name": [{ "prefix": "invoices-input-" }]
+        },
+        "object": {
+          "key": [{ "suffix": ".tiff" }]
+        }
+      }
+    }
+  },
+
+  "target": {
+    "Id": "InvoiceUploadedQueue",
+    "Arn": "arn:aws:sqs:{region}:{account-id}:invoice-uploaded-{env}",
+
+    "InputTransformer": {
+      "InputPathsMap": {
+        "bucket":  "$.detail.bucket.name",
+        "key":     "$.detail.object.key",
+        "size":    "$.detail.object.size",
+        "eventId": "$.id",
+        "time":    "$.time"
+      },
+      "InputTemplate": "{\"bucket\":\"<bucket>\",\"key\":\"<key>\",\"size\":<size>,\"eventId\":\"<eventId>\",\"time\":\"<time>\",\"source\":\"eventbridge-s3\"}"
+    },
+
+    "RetryPolicy": {
+      "MaximumRetryAttempts": 185,
+      "MaximumEventAgeInSeconds": 86400
+    },
+
+    "DeadLetterConfig": {
+      "Arn": "arn:aws:sqs:{region}:{account-id}:eventbridge-dlq-{env}"
+    }
+  },
+
+  "sqs_queue_policy": {
+    "_comment": "Resource-based policy to attach to the target SQS queue (invoice-uploaded-{env})",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowEventBridgeSendMessage",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "events.amazonaws.com"
+        },
+        "Action": "sqs:SendMessage",
+        "Resource": "arn:aws:sqs:{region}:{account-id}:invoice-uploaded-{env}",
+        "Condition": {
+          "ArnEquals": {
+            "aws:SourceArn": "arn:aws:events:{region}:{account-id}:rule/invoice-uploaded-{env}"
+          }
+        }
+      }
+    ]
+  },
+
+  "s3_notification_configuration": {
+    "_comment": "S3 bucket notification setting that enables EventBridge. Applied via aws_s3_bucket_notification Terraform resource.",
+    "EventBridgeConfiguration": {}
+  },
+
+  "schema_registry": {
+    "_comment": "Optional — enables schema discovery on the default bus. Schemas are auto-inferred from events.",
+    "RegistryName": "discovered-schemas",
+    "Discoverer": {
+      "SourceArn": "arn:aws:events:{region}:{account-id}:event-bus/default",
+      "CrossAccount": false
+    }
+  },
+
+  "scheduler_example": {
+    "_comment": "EventBridge Scheduler for CrewAI ops (separate from rule above)",
+    "Name": "crewai-daily-ops-{env}",
+    "ScheduleExpression": "cron(0 6 * * ? *)",
+    "ScheduleExpressionTimezone": "UTC",
+    "FlexibleTimeWindow": {
+      "Mode": "FLEXIBLE",
+      "MaximumWindowInMinutes": 30
+    },
+    "Target": {
+      "Arn": "arn:aws:lambda:{region}:{account-id}:function:crewai-autonomous-ops-{env}",
+      "RoleArn": "arn:aws:iam::{account-id}:role/scheduler-invoke-crewai-{env}",
+      "Input": "{\"mode\":\"full-run\",\"environment\":\"{env}\"}",
+      "RetryPolicy": {
+        "MaximumRetryAttempts": 3,
+        "MaximumEventAgeInSeconds": 3600
+      },
+      "DeadLetterConfig": {
+        "Arn": "arn:aws:sqs:{region}:{account-id}:scheduler-dlq-{env}"
+      }
+    }
+  }
+}

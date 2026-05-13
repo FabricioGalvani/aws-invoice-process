@@ -1,0 +1,115 @@
+{
+  "_comment": "Least-privilege IAM policies for CloudWatch observability in the invoice pipeline. Three separate policy documents are defined here: (1) Lambda execution role additions for CloudWatch Logs and EMF metrics, (2) CloudWatch Logs service role to send to Firehose, (3) Kinesis Firehose role to write to S3. Attach each to the corresponding IAM role in Terraform.",
+
+  "lambda_cloudwatch_policy": {
+    "_description": "Attach to each Lambda execution role. Allows structured logging to its own log group and EMF metric emission via stdout (no PutMetricData needed). Also allows X-Ray segment writes.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "CloudWatchLogsWrite",
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/${function_name}:*"
+      },
+      {
+        "Sid": "XRayWrite",
+        "Effect": "Allow",
+        "Action": [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+          "xray:GetSamplingRules",
+          "xray:GetSamplingTargets"
+        ],
+        "Resource": "*"
+      }
+    ]
+  },
+
+  "cloudwatch_logs_to_firehose_policy": {
+    "_description": "Attach to the IAM role assumed by the CloudWatch Logs service (principal: logs.{region}.amazonaws.com). Allows logs to put records into the Firehose delivery stream. Trust policy must include ArnLike condition on SourceArn for the log group.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "FirehosePutRecord",
+        "Effect": "Allow",
+        "Action": [
+          "firehose:PutRecord",
+          "firehose:PutRecordBatch"
+        ],
+        "Resource": "arn:aws:firehose:*:*:deliverystream/invoice-pipeline-logs-*"
+      }
+    ]
+  },
+
+  "firehose_to_s3_policy": {
+    "_description": "Attach to the IAM role assumed by the Kinesis Firehose service (principal: firehose.amazonaws.com). Allows the delivery stream to write objects to the logs S3 bucket.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "S3LogsBucketWrite",
+        "Effect": "Allow",
+        "Action": [
+          "s3:AbortMultipartUpload",
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:PutObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::invoices-logs-*",
+          "arn:aws:s3:::invoices-logs-*/*"
+        ]
+      }
+    ]
+  },
+
+  "trust_policies": {
+    "cloudwatch_logs_trust": {
+      "_description": "Trust policy for the CloudWatch Logs → Firehose role. SourceArn condition prevents confused deputy attacks.",
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "logs.{region}.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole",
+          "Condition": {
+            "ArnLike": {
+              "aws:SourceArn": "arn:aws:logs:{region}:{account_id}:log-group:*"
+            },
+            "StringEquals": {
+              "aws:SourceAccount": "{account_id}"
+            }
+          }
+        }
+      ]
+    },
+
+    "firehose_trust": {
+      "_description": "Trust policy for the Firehose → S3 role.",
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "firehose.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }
+  },
+
+  "notes": {
+    "emf_no_putmetricdata": "EMF metrics emitted via Lambda stdout (aws-lambda-powertools Metrics) do NOT require cloudwatch:PutMetricData in the Lambda role. The CloudWatch Logs agent processes the EMF JSON from the log stream server-side.",
+    "xray_managed_policy": "Alternatively, attach AWS managed policy arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess to each Lambda role instead of the inline XRayWrite statement.",
+    "log_group_resource_scope": "Replace ${function_name} with actual function name or use wildcard /aws/lambda/* only if all Lambda roles are the same. Prefer function-specific scope for least-privilege.",
+    "kms_optional": "If CloudWatch log groups are encrypted with a CMK, add kms:Decrypt and kms:GenerateDataKey permissions scoped to that key ARN."
+  }
+}
