@@ -1,2 +1,8 @@
 settings.local.json
 .claude/settings.json
+.claude/settings.local.json
+tips
+.claude/agents
+.claude/commands
+.claude/kb
+.claude/sdd
