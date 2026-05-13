@@ -1,0 +1,191 @@
+{
+  "_comment": "CloudWatch Dashboard body for the invoice pipeline. Environment and region are parameterized as {env} and {region} placeholders — substitute via Terraform templatefile(). Function names follow the pattern {name}-{env}. To use: copy into a .json.tpl file and reference from aws_cloudwatch_dashboard.dashboard_body.",
+
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0, "y": 0, "width": 24, "height": 1,
+      "properties": {
+        "markdown": "# Invoice Pipeline — {env} | SLO: ≥90% Extraction Accuracy | [Runbook](#)"
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0, "y": 1, "width": 12, "height": 6,
+      "properties": {
+        "title": "Extraction Accuracy (%) — SLO ≥90%",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 300,
+        "region": "{region}",
+        "metrics": [
+          ["InvoicePipeline", "ExtractionAccuracy", "environment", "{env}", {"label": "Accuracy %", "color": "#2ca02c"}]
+        ],
+        "annotations": {
+          "horizontal": [
+            {"value": 90, "label": "SLO threshold", "color": "#d62728", "fill": "below"}
+          ]
+        },
+        "yAxis": {"left": {"min": 0, "max": 100}}
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12, "y": 1, "width": 6, "height": 6,
+      "properties": {
+        "title": "Invoices Processed (24h)",
+        "view": "singleValue",
+        "stat": "Sum",
+        "period": 86400,
+        "region": "{region}",
+        "metrics": [
+          ["InvoicePipeline", "InvoicesProcessed", "environment", "{env}"]
+        ]
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 18, "y": 1, "width": 6, "height": 6,
+      "properties": {
+        "title": "Bedrock Fallbacks (Haiku→Sonnet)",
+        "view": "singleValue",
+        "stat": "Sum",
+        "period": 86400,
+        "region": "{region}",
+        "metrics": [
+          ["InvoicePipeline", "BedrockFallbacks", "environment", "{env}", {"color": "#ff7f0e"}]
+        ]
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0, "y": 7, "width": 12, "height": 6,
+      "properties": {
+        "title": "Lambda Invocations",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": 60,
+        "region": "{region}",
+        "metrics": [
+          ["AWS/Lambda", "Invocations", "FunctionName", "tiff-to-png-converter-{env}", {"label": "1-TIFF→PNG"}],
+          ["AWS/Lambda", "Invocations", "FunctionName", "invoice-classifier-{env}", {"label": "2-Classifier"}],
+          ["AWS/Lambda", "Invocations", "FunctionName", "data-extractor-{env}", {"label": "3-Extractor"}],
+          ["AWS/Lambda", "Invocations", "FunctionName", "warehouse-writer-{env}", {"label": "4-Writer"}]
+        ]
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12, "y": 7, "width": 12, "height": 6,
+      "properties": {
+        "title": "Lambda Errors",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": 60,
+        "region": "{region}",
+        "metrics": [
+          ["AWS/Lambda", "Errors", "FunctionName", "tiff-to-png-converter-{env}", {"color": "#d62728", "label": "1-TIFF→PNG"}],
+          ["AWS/Lambda", "Errors", "FunctionName", "invoice-classifier-{env}", {"color": "#ff7f0e", "label": "2-Classifier"}],
+          ["AWS/Lambda", "Errors", "FunctionName", "data-extractor-{env}", {"color": "#9467bd", "label": "3-Extractor"}],
+          ["AWS/Lambda", "Errors", "FunctionName", "warehouse-writer-{env}", {"color": "#8c564b", "label": "4-Writer"}]
+        ]
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0, "y": 13, "width": 12, "height": 6,
+      "properties": {
+        "title": "Lambda Duration p95 (ms)",
+        "view": "timeSeries",
+        "stat": "p95",
+        "period": 60,
+        "region": "{region}",
+        "metrics": [
+          ["AWS/Lambda", "Duration", "FunctionName", "tiff-to-png-converter-{env}", {"label": "1-TIFF→PNG (limit 300s)"}],
+          ["AWS/Lambda", "Duration", "FunctionName", "invoice-classifier-{env}", {"label": "2-Classifier (limit 60s)"}],
+          ["AWS/Lambda", "Duration", "FunctionName", "data-extractor-{env}", {"label": "3-Extractor (limit 120s)"}],
+          ["AWS/Lambda", "Duration", "FunctionName", "warehouse-writer-{env}", {"label": "4-Writer (limit 60s)"}]
+        ],
+        "yAxis": {"left": {"label": "ms"}}
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12, "y": 13, "width": 12, "height": 6,
+      "properties": {
+        "title": "SQS Queue Depths",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 60,
+        "region": "{region}",
+        "metrics": [
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-uploaded-{env}"],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-converted-{env}"],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-classified-{env}"],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-extracted-{env}"]
+        ]
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0, "y": 19, "width": 12, "height": 6,
+      "properties": {
+        "title": "DLQ Depths (must be 0)",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": 60,
+        "region": "{region}",
+        "metrics": [
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-uploaded-dlq-{env}", {"color": "#d62728"}],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-converted-dlq-{env}", {"color": "#ff7f0e"}],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-classified-dlq-{env}", {"color": "#9467bd"}],
+          ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "invoice-extracted-dlq-{env}", {"color": "#8c564b"}]
+        ],
+        "annotations": {
+          "horizontal": [{"value": 0.5, "label": "Any DLQ message = alert", "color": "#d62728"}]
+        }
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12, "y": 19, "width": 12, "height": 6,
+      "properties": {
+        "title": "Pydantic Validation Failures",
+        "view": "bar",
+        "stat": "Sum",
+        "period": 3600,
+        "region": "{region}",
+        "metrics": [
+          ["InvoicePipeline", "PydanticValidationFailures", "environment", "{env}", {"color": "#d62728"}]
+        ]
+      }
+    },
+
+    {
+      "type": "alarm",
+      "x": 0, "y": 25, "width": 24, "height": 3,
+      "properties": {
+        "title": "Pipeline Alarm Status",
+        "alarms": [
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-extraction-failure-rate-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-pipeline-health-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-uploaded-dlq-depth-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-converted-dlq-depth-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-classified-dlq-depth-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:invoice-extracted-dlq-depth-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:data-extractor-p95-duration-{env}",
+          "arn:aws:cloudwatch:{region}:{account_id}:alarm:bedrock-fallbacks-{env}"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "_comment": "Least-privilege IAM policy for warehouse-writer Lambda (Athena + Glue + S3 write path). MCP Validated: 2026-05-12. Substitute ACCOUNT, REGION, ENV placeholders at deploy time via Terraform templatefile().",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AthenaQueryExecution",
+      "Effect": "Allow",
+      "Action": [
+        "athena:StartQueryExecution",
+        "athena:GetQueryExecution",
+        "athena:GetQueryResults",
+        "athena:StopQueryExecution",
+        "athena:GetWorkGroup"
+      ],
+      "Resource": [
+        "arn:aws:athena:REGION:ACCOUNT:workgroup/warehouse-writer-ENV"
+      ]
+    },
+    {
+      "Sid": "GlueCatalogAccess",
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase",
+        "glue:GetDatabases",
+        "glue:GetTable",
+        "glue:GetTables",
+        "glue:CreateTable",
+        "glue:UpdateTable",
+        "glue:GetPartitions",
+        "glue:BatchGetPartition"
+      ],
+      "Resource": [
+        "arn:aws:glue:REGION:ACCOUNT:catalog",
+        "arn:aws:glue:REGION:ACCOUNT:database/invoices_ENV",
+        "arn:aws:glue:REGION:ACCOUNT:table/invoices_ENV/*"
+      ]
+    },
+    {
+      "Sid": "S3WarehouseWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::invoices-warehouse-ENV",
+        "arn:aws:s3:::invoices-warehouse-ENV/*"
+      ]
+    },
+    {
+      "Sid": "S3QueryResultsWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::invoices-query-results-ENV",
+        "arn:aws:s3:::invoices-query-results-ENV/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:REGION:ACCOUNT:log-group:/aws/lambda/warehouse-writer-ENV:*"
+      ]
+    },
+    {
+      "Sid": "XRayTracing",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords"
+      ],
+      "Resource": "*"
+    }
+  ],
+  "_notes": {
+    "pyiceberg_only_path": "If using pyiceberg write path (no Athena), remove AthenaQueryExecution and S3QueryResultsWrite statements. GlueCatalogAccess and S3WarehouseWrite remain required.",
+    "athena_only_path": "All statements required for Athena SQL INSERT INTO path.",
+    "no_glue_delete": "glue:DeleteTable omitted intentionally — warehouse-writer should never delete tables. Lifecycle managed separately.",
+    "no_glue_create_database": "glue:CreateDatabase omitted — database created at bootstrap time by infra role, not by per-invoice Lambda.",
+    "terraform_usage": "Use templatefile() or aws_iam_policy_document with account_id and region variables. ENV = dev | prod."
+  }
+}

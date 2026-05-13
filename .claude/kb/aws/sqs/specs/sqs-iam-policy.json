@@ -1,0 +1,185 @@
+{
+  "_comment": "MCP Validated: 2026-05-12 — Least-privilege IAM policies per Lambda role for the invoice pipeline. Replace ACCOUNT_ID, REGION, ENV as appropriate.",
+
+  "tiff_to_png_converter": {
+    "_description": "Consumes invoice-uploaded. Reads raw TIFF from input bucket. Writes PNG to processed bucket. Sends to invoice-converted queue.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ConsumeUploadedQueue",
+        "Effect": "Allow",
+        "Action": [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-uploaded"
+      },
+      {
+        "Sid": "ProduceConvertedQueue",
+        "Effect": "Allow",
+        "Action": ["sqs:SendMessage"],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-converted"
+      },
+      {
+        "Sid": "ReadInputBucket",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject"],
+        "Resource": "arn:aws:s3:::invoices-input-ENV/*"
+      },
+      {
+        "Sid": "WriteProcessedAndArchiveBuckets",
+        "Effect": "Allow",
+        "Action": ["s3:PutObject"],
+        "Resource": [
+          "arn:aws:s3:::invoices-processed-ENV/*",
+          "arn:aws:s3:::invoices-archive-ENV/*"
+        ]
+      }
+    ]
+  },
+
+  "invoice_classifier": {
+    "_description": "Consumes invoice-converted. Reads PNG from processed bucket. Sends to invoice-classified queue.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ConsumeConvertedQueue",
+        "Effect": "Allow",
+        "Action": [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-converted"
+      },
+      {
+        "Sid": "ProduceClassifiedQueue",
+        "Effect": "Allow",
+        "Action": ["sqs:SendMessage"],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-classified"
+      },
+      {
+        "Sid": "ReadProcessedBucket",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject"],
+        "Resource": "arn:aws:s3:::invoices-processed-ENV/*"
+      }
+    ]
+  },
+
+  "data_extractor": {
+    "_description": "Consumes invoice-classified. Reads PNG from processed bucket. Calls Bedrock (Claude Haiku 4.5). Gets OpenRouter key from Secrets Manager. Sends to invoice-extracted queue.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ConsumeClassifiedQueue",
+        "Effect": "Allow",
+        "Action": [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-classified"
+      },
+      {
+        "Sid": "ProduceExtractedQueue",
+        "Effect": "Allow",
+        "Action": ["sqs:SendMessage"],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-extracted"
+      },
+      {
+        "Sid": "ReadProcessedBucket",
+        "Effect": "Allow",
+        "Action": ["s3:GetObject"],
+        "Resource": "arn:aws:s3:::invoices-processed-ENV/*"
+      },
+      {
+        "Sid": "InvokeBedrock",
+        "Effect": "Allow",
+        "Action": ["bedrock:InvokeModel"],
+        "Resource": [
+          "arn:aws:bedrock:REGION::foundation-model/anthropic.claude-haiku-4-5",
+          "arn:aws:bedrock:REGION::foundation-model/anthropic.claude-sonnet-4-5"
+        ]
+      },
+      {
+        "Sid": "ReadOpenRouterSecret",
+        "Effect": "Allow",
+        "Action": ["secretsmanager:GetSecretValue"],
+        "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:invoice-pipeline/openrouter-api-key-*"
+      }
+    ]
+  },
+
+  "warehouse_writer": {
+    "_description": "Consumes invoice-extracted. Writes extracted data to S3 (Iceberg). Runs Athena queries for Iceberg metadata via Glue.",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ConsumeExtractedQueue",
+        "Effect": "Allow",
+        "Action": [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ],
+        "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:invoice-extracted"
+      },
+      {
+        "Sid": "WriteWarehouseBucket",
+        "Effect": "Allow",
+        "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+        "Resource": "arn:aws:s3:::invoices-warehouse-ENV/*"
+      },
+      {
+        "Sid": "AthenaQueryExecution",
+        "Effect": "Allow",
+        "Action": [
+          "athena:StartQueryExecution",
+          "athena:GetQueryExecution",
+          "athena:GetQueryResults"
+        ],
+        "Resource": "arn:aws:athena:REGION:ACCOUNT_ID:workgroup/invoice-pipeline-ENV"
+      },
+      {
+        "Sid": "GlueIcebergMetadata",
+        "Effect": "Allow",
+        "Action": [
+          "glue:GetTable",
+          "glue:GetDatabase",
+          "glue:UpdateTable",
+          "glue:CreateTable",
+          "glue:BatchCreatePartition",
+          "glue:GetPartition",
+          "glue:UpdatePartition"
+        ],
+        "Resource": [
+          "arn:aws:glue:REGION:ACCOUNT_ID:catalog",
+          "arn:aws:glue:REGION:ACCOUNT_ID:database/invoice_pipeline_ENV",
+          "arn:aws:glue:REGION:ACCOUNT_ID:table/invoice_pipeline_ENV/*"
+        ]
+      }
+    ]
+  },
+
+  "notes": {
+    "consumer_actions_required_by_lambda_esm": [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes"
+    ],
+    "change_message_visibility_optional": "Required only if Lambda needs to extend visibility timeout mid-flight",
+    "dlq_permissions": "DLQs do not need explicit IAM permissions on Lambda roles; SQS service handles DLQ routing autonomously based on the redrive policy",
+    "bedrock_no_api_key": "Bedrock authentication uses IAM Role — no API key needed in Secrets Manager for Bedrock itself",
+    "references": [
+      "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-least-privilege-policy.html",
+      "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-examples-of-iam-policies.html",
+      "https://repost.aws/questions/QUSvvYhsz-QpCqbanDkdbeDg/what-iam-permissions-do-i-need-to-consume-an-sqs-que-from-lambda"
+    ]
+  }
+}

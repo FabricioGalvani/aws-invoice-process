@@ -1,0 +1,101 @@
+{
+  "_comment": "Least-privilege IAM policy for the data-extractor Lambda role.",
+  "_validated": "2026-05-12",
+  "_source": "notes/07-aws-migration-plan.md §4.5 + AWS IAM docs",
+
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockInvokeModels",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+      ],
+      "_comment_resource": "Wildcard region required for cross-region inference profiles. Scoped to exact model versions — not a blanket Anthropic ARN."
+    },
+    {
+      "Sid": "S3ReadProcessedInvoices",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::invoices-processed-dev/*",
+        "arn:aws:s3:::invoices-processed-prod/*"
+      ]
+    },
+    {
+      "Sid": "SQSConsumeClassifiedQueue",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
+      ],
+      "Resource": [
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-classified-dev",
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-classified-prod",
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-classified-dev-dlq",
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-classified-prod-dlq"
+      ]
+    },
+    {
+      "Sid": "SQSSendExtractedQueue",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:SendMessage"
+      ],
+      "Resource": [
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-extracted-dev",
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:invoice-extracted-prod"
+      ]
+    },
+    {
+      "Sid": "SecretsManagerReadOpenRouter",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:invoice-pipeline/openrouter-api-key-*",
+        "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:invoice-pipeline/langfuse/secret-key-*"
+      ],
+      "_comment": "OpenRouter for secondary LLM fallback. LangFuse secret key for tracing."
+    },
+    {
+      "Sid": "SSMReadParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/invoice-pipeline/*"
+      ],
+      "_comment": "Non-sensitive config: model IDs, LangFuse public key, LangFuse host."
+    },
+    {
+      "Sid": "CloudWatchMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*",
+      "_comment": "PutMetricData does not support resource-level constraints."
+    },
+    {
+      "Sid": "XRayTracing",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
