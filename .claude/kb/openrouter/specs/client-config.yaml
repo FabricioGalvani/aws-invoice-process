@@ -1,0 +1,61 @@
+schema_version: "1.0"
+domain: openrouter
+file_type: client-configuration
+last_validated: "2026-05-13"
+source: "https://openrouter.ai/docs/api/reference/parameters"
+
+# Minimum viable OpenRouter client configuration for the invoice-pipeline Lambda.
+# All values are production defaults; override per environment via SSM Parameter Store.
+
+client:
+  base_url: "https://openrouter.ai/api/v1"
+  auth:
+    type: bearer
+    secret_id: "prod/invoice-pipeline/openrouter-api-key"   # AWS Secrets Manager path
+    secret_key: "api_key"                                    # JSON key inside secret
+  headers:
+    HTTP-Referer: "https://github.com/your-org/invoice-pipeline"  # TODO: update to real repo URL
+    X-Title: "invoice-pipeline"
+  timeout_seconds: 30
+  max_retries: 0     # tenacity handles retries externally
+
+models:
+  primary:
+    id: "anthropic/claude-haiku-4-5"
+    use_case: "default extraction; fast, cheap"
+    max_tokens: 1024
+    temperature: 0.0
+  quality_fallback:
+    id: "anthropic/claude-sonnet-4-5"
+    use_case: "triggered when Pydantic validation fails on primary output"
+    max_tokens: 2048
+    temperature: 0.0
+
+provider_defaults:
+  require_parameters: true       # skip backends without response_format support
+  data_collection: "deny"        # suppress provider data retention (PII invoices)
+  allow_fallbacks: true          # allow provider-level fallback within same model
+  # zdr: true                    # TODO: enable if Zero Data Retention required by compliance
+
+structured_output:
+  response_format_type: "json_schema"
+  strict: true
+
+retry:
+  max_attempts: 3
+  wait_min_seconds: 2
+  wait_max_seconds: 10
+  retryable_status_codes: [429, 500, 502, 503, 504]
+
+telemetry:
+  cloudwatch_namespace: "InvoicePipeline"
+  cost_metric_name: "OpenRouterCostUSD"
+  generation_stats_endpoint: "https://openrouter.ai/api/v1/generation"
+
+acceptance_criteria:
+  # OpenRouter fallback is considered "healthy" when all of the following pass.
+  # Reference: specs/fallback-health-criteria.yaml
+  latency_p50_ms: 3000
+  latency_p99_ms: 15000
+  schema_conformance_rate: 0.90    # ≥90% of responses pass Pydantic validation
+  availability_target: 0.995       # 99.5% success rate over 30-day rolling window
