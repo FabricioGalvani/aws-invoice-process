@@ -1,8 +1,8 @@
 # Knowledge Base Index
 # Machine-readable registry for KB domains
 
-version: "2.3"
-last_updated: "2026-05-12"
+version: "2.4"
+last_updated: "2026-05-13"
 
 # File Size Limits (SINGLE SOURCE OF TRUTH)
 limits:
@@ -35,7 +35,7 @@ shared:
     path: shared/anti-patterns.md
     description: "Cross-agent anti-pattern library referenced by all data engineering agents"
 
-# Domain Registry — 23 Domains
+# Domain Registry — 24 Domains
 domains:
 
   # ─── Core Data Engineering ─────────────────────────────────────────
@@ -1268,3 +1268,48 @@ domains:
       - name: webhook-edge-function
         path: patterns/webhook-edge-function.md
         confidence: 0.95
+
+  # ─── LLM Gateways & Fallback ───────────────────────────────────────
+
+  openrouter:
+    name: openrouter
+    description: "OpenRouter as the secondary LLM fallback gateway after Bedrock — unified OpenAI-compatible API, provider preferences, structured outputs, cost telemetry"
+    path: openrouter/
+    mcp_validated: "2026-05-13"
+    entry_points:
+      index: index.md
+      quick_reference: quick-reference.md
+    concepts:
+      - name: unified-gateway
+        path: concepts/unified-gateway.md
+        confidence: 0.92
+      - name: model-routing
+        path: concepts/model-routing.md
+        confidence: 0.92
+      - name: provider-preferences
+        path: concepts/provider-preferences.md
+        confidence: 0.92
+      - name: structured-outputs
+        path: concepts/structured-outputs.md
+        confidence: 0.92
+      - name: auth-and-security
+        path: concepts/auth-and-security.md
+        confidence: 0.90
+    patterns:
+      - name: bedrock-fallback-adapter
+        path: patterns/bedrock-fallback-adapter.md
+        confidence: 0.92
+      - name: pydantic-validated-extraction
+        path: patterns/pydantic-validated-extraction.md
+        confidence: 0.92
+      - name: retry-timeout-strategy
+        path: patterns/retry-timeout-strategy.md
+        confidence: 0.90
+      - name: cost-telemetry
+        path: patterns/cost-telemetry.md
+        confidence: 0.90
+    specs:
+      - name: client-config
+        path: specs/client-config.yaml
+      - name: fallback-health-criteria
+        path: specs/fallback-health-criteria.yaml

@@ -1,0 +1,62 @@
+schema_version: "1.0"
+domain: openrouter
+file_type: acceptance-criteria
+last_validated: "2026-05-13"
+source: "Internal pipeline requirements — notes/summary-requirements.md (D10, ≥90% extraction accuracy target)"
+
+# Acceptance criteria for "OpenRouter fallback healthy" in the invoice-pipeline.
+# These thresholds determine whether the fallback adapter is promoted or rolled back.
+
+integration:
+  trigger_condition: "BedrockAdapter raises after 3 attempts OR Pydantic validation fails"
+  circuit_breaker:
+    open_after_consecutive_failures: 5
+    half_open_probe_interval_seconds: 60
+
+latency:
+  per_call_timeout_seconds: 30
+  p50_target_ms: 3000
+  p95_target_ms: 10000
+  p99_target_ms: 15000
+  # If p99 > 15s: alert and evaluate switching to a faster model variant
+
+extraction_quality:
+  pydantic_validation_pass_rate: 0.90     # project target ≥90% accuracy
+  schema_fields_required:                 # all 12 invoice fields must be present
+    - invoice_id
+    - vendor_name
+    - vendor_platform
+    - restaurant_id
+    - subtotal
+    - tax
+    - fees
+    - total
+    - currency
+    - issue_date
+    - line_items_count
+  optional_fields:
+    - due_date
+
+cost:
+  # TODO: fill in actual per-token rates from your OpenRouter dashboard
+  haiku_prompt_cost_per_1k_tokens: null       # update from openrouter.ai/models
+  haiku_completion_cost_per_1k_tokens: null   # update from openrouter.ai/models
+  monthly_budget_usd: null                    # set based on 3500 invoices/month volume
+  cost_per_invoice_ceiling_usd: 0.01          # alert if single-invoice cost exceeds this
+
+security:
+  data_collection: "deny"          # enforced in every request
+  api_key_rotation_days: 90        # rotate Secrets Manager secret quarterly
+  key_never_logged: true
+  key_never_in_env_vars: true
+
+monitoring:
+  cloudwatch_alarms:
+    - name: "OpenRouterHighErrorRate"
+      metric: "OpenRouterCallErrors"
+      threshold: 0.05              # 5% error rate
+      period_seconds: 300
+    - name: "OpenRouterHighCost"
+      metric: "OpenRouterCostUSD"
+      threshold: null              # TODO: set monthly_budget_usd / 30 / expected_daily_volume
+      period_seconds: 86400
