@@ -172,6 +172,12 @@ When implementation starts (week of May 16, 2026), this section will be replaced
 
 ---
 
+## 🧾 About the Sample Data (Synthetic Invoices)
+
+All sample invoices used in this repository were synthetically generated using Google Gemini. The goal of generating these documents via AI was to create a diverse and realistic dataset—simulating the layouts of various delivery apps (such as Uber Eats, iFood, Rappi, and DoorDash)—to test and validate the extraction pipelines of this processor. Using synthetic data ensures that no real personal or sensitive information is exposed during the development and demonstration of this project.
+
+---
+
 ## Extraction Schema (v1)
 
 The pipeline extracts 12 fields per invoice, validated against a Pydantic model:
